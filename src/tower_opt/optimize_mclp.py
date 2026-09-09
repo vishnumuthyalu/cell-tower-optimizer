@@ -1,38 +1,32 @@
-"""Exact solve via spopt's MCLP (ILP under the hood, solved with PuLP/CBC)."""
+"""Exact solve via spopt's MCLP (ILP under the hood, solved with PuLP/CBC).
+
+Uses the same haversine distance matrix as the greedy heuristic so both
+solvers are compared on identical distances. An earlier version reprojected
+to EPSG:3857 and used a flat Euclidean radius there, which silently
+distorts real-world distance away from the equator -- at Austin's latitude
+that shrank the effective coverage radius enough that the "exact" solver
+scored worse than greedy, which is impossible for a correctly-posed MCLP.
+"""
 import time
-import geopandas as gpd
-from shapely.geometry import Point
 import pulp
 from spopt.locate import MCLP
 
+from .coverage import haversine_matrix
+
 
 def solve_mclp_exact(demand_df, candidate_df, radius_km: float, p: int):
-    demand_gdf = gpd.GeoDataFrame(
-        demand_df,
-        geometry=[Point(xy) for xy in zip(demand_df["lon"], demand_df["lat"])],
-        crs="EPSG:4326",
+    cost_matrix = haversine_matrix(
+        demand_df["lat"].values, demand_df["lon"].values,
+        candidate_df["lat"].values, candidate_df["lon"].values,
+        
     )
-    candidate_gdf = gpd.GeoDataFrame(
-        candidate_df,
-        geometry=[Point(xy) for xy in zip(candidate_df["lon"], candidate_df["lat"])],
-        crs="EPSG:4326",
-    )
+    demand_weights = demand_df["population"].values
 
-    # spopt's default distance metric works in projected units; reproject to
-    # a meter-based CRS so the radius (converted to meters) is meaningful.
-    demand_proj = demand_gdf.to_crs(epsg=3857)
-    candidate_proj = candidate_gdf.to_crs(epsg=3857)
-    radius_m = radius_km * 1000
-
-    model = MCLP.from_geodataframe(
-        demand_proj,
-        candidate_proj,
-        "geometry",
-        "geometry",
-        "population",
-        radius_m,
+    model = MCLP.from_cost_matrix(
+        cost_matrix,
+        demand_weights,
+        radius_km,
         p_facilities=p,
-        distance_metric="euclidean",
         name="tower-mclp",
     )
 

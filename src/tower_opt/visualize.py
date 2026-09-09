@@ -1,11 +1,12 @@
 import folium
+from folium.plugins import MarkerCluster
 from .config import OUTPUTS
 
 
 def build_map(demand_df, candidate_df, existing_towers_df, selected_indices,
               radius_km: float, out_name: str = "coverage_map.html"):
     center = [demand_df["lat"].mean(), demand_df["lon"].mean()]
-    m = folium.Map(location=center, zoom_start=11, tiles="cartodbpositron")
+    m = folium.Map(location=center, zoom_start=11, tiles="OpenStreetMap")
 
     # population as circle markers sized by population
     max_pop = demand_df["population"].max()
@@ -20,12 +21,19 @@ def build_map(demand_df, candidate_df, existing_towers_df, selected_indices,
             tooltip=f"Pop: {int(row['population'])}",
         ).add_to(m)
 
+    # existing towers: thousands of points, so cluster them instead of
+    # dropping 2000+ full pin icons directly on the map
+    tower_cluster = MarkerCluster(name="Existing towers").add_to(m)
     for _, row in existing_towers_df.iterrows():
-        folium.Marker(
+        folium.CircleMarker(
             location=[row["lat"], row["lon"]],
-            icon=folium.Icon(color="blue", icon="signal", prefix="fa"),
+            radius=3,
+            color="#2563eb",
+            fill=True,
+            fill_opacity=0.7,
+            weight=0,
             tooltip="Existing tower",
-        ).add_to(m)
+        ).add_to(tower_cluster)
 
     for idx in selected_indices:
         row = candidate_df.iloc[idx]
@@ -42,6 +50,7 @@ def build_map(demand_df, candidate_df, existing_towers_df, selected_indices,
             weight=1,
         ).add_to(m)
 
+    folium.LayerControl().add_to(m)
     out_path = OUTPUTS / out_name
     m.save(str(out_path))
     print(f"Map saved -> {out_path}")
