@@ -1,0 +1,15 @@
+pandas
+numpy
+geopandas
+shapely
+folium
+streamlit-folium
+pulp
+spopt
+requests
+python-dotenv
+fastapi
+uvicorn[standard]
+streamlit
+matplotlib
+pytest
